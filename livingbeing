@@ -1,0 +1,38 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class LivingBeing : MonoBehaviour {
+
+    [Header("References")]
+    public Rigidbody2D _rigidbody;
+    public SpriteRenderer _renderer;
+
+    [Header("Variables")]
+    public int startHealth;
+    public int currentHealth;
+
+    protected virtual void Start()
+    {
+        currentHealth = startHealth;
+    }
+
+    protected virtual void TakeDamage(int amount) {
+        currentHealth -= amount;
+
+        if(currentHealth <= 0)
+        {
+            Die();
+        }
+    }
+
+    protected virtual void Die()
+    {
+        Debug.Log("I have died");
+    }
+
+    protected virtual void OnCollisionEnter2D(Collision2D collision)
+    {
+        //Override this method depending on if the inheriting script is player or enemy.
+    }
+}
