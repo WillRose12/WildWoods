@@ -1,0 +1,214 @@
+using System;
+using System.Collections;
+using UnityEngine;
+
+public class Boss : LivingBeing {
+
+    [Header("References")]
+    public Transform[] waypoints;
+    public Transform nextWaypoint;
+    public GameObject player;
+    public float WaypointDetectionRange;
+    public float WaypointWaitTime;
+    public GameObject collider;
+    private Vector2 direction;
+    private Vector2 placeholder;
+
+    public enum MovementStyle
+    {
+        Flying,
+        Grounded,
+    }
+
+    public MovementStyle movementStyle;
+
+    [Header("Grounded")]
+    public float runSpeed;
+
+    [Header("Flying")]
+    public float flySpeed;
+    public enum RotationStyle
+    {
+        NoRotation,
+        FaceNextWaypoint,
+        FacePlayer,
+        TravelThenFacePlayer,
+    }
+
+    public enum FlyingStyle
+    {
+        Discrete,
+        Continuous,
+    }
+
+    public FlyingStyle flyingStyle;
+    public RotationStyle rotationStyle;
+    public bool arrivedAtWaypoint;
+
+    protected override void Start()
+    {
+        base.Start();
+        SetUpMovementStyle();
+        GetNextWaypoint();
+        StartCoroutine(MoveToNextWaypoint());
+    }
+
+    private void SetUpMovementStyle()
+    {
+        if(movementStyle == MovementStyle.Grounded)
+        {
+            _rigidbody.gravityScale = 4;
+            WaypointDetectionRange = 0.75f;
+            _rigidbody.constraints = RigidbodyConstraints2D.FreezeRotation;
+            rotationStyle = RotationStyle.NoRotation;
+
+        }
+        else
+        {
+            _rigidbody.gravityScale = 0;
+            WaypointDetectionRange = 0.25f;
+            if (rotationStyle != RotationStyle.NoRotation)
+            {
+                _rigidbody.constraints = RigidbodyConstraints2D.None;
+            }
+            else
+            {
+                _rigidbody.constraints = RigidbodyConstraints2D.FreezeRotation;
+            }
+        }
+    }
+
+    protected override void OnCollisionEnter2D(Collision2D collision)
+    {
+        base.OnCollisionEnter2D(collision);
+
+        if(collision.gameObject.layer == LayerMask.NameToLayer("Arrow"))
+        {
+            TakeDamage(20);
+        }
+    }
+
+    protected void GetNextWaypoint()
+    {
+        int currentWaypointNum = Array.IndexOf(waypoints, nextWaypoint);
+        if (currentWaypointNum == waypoints.Length-1)
+        {
+            nextWaypoint = waypoints[0];
+        }
+        else
+        {
+            nextWaypoint = waypoints[Array.IndexOf(waypoints, nextWaypoint) + 1];
+        }
+        direction = new Vector2(nextWaypoint.position.x - transform.position.x, nextWaypoint.position.y - transform.position.y);
+    }
+
+    protected IEnumerator MoveToNextWaypoint()
+    {
+        if (Vector2.Distance(transform.position, nextWaypoint.transform.position) > WaypointDetectionRange)
+        {
+            if (movementStyle == MovementStyle.Grounded)
+            {
+                float dir = 0;
+                if (direction.x > 0)
+                {
+                    dir = 1;
+                    Flip(false);
+                }
+                else
+                {
+                    dir = -1;
+                    Flip(true);
+                }
+                _rigidbody.velocity = new Vector2(dir * runSpeed, _rigidbody.velocity.y);
+                arrivedAtWaypoint = false;
+            }
+            else
+            {
+                Vector2 dir = transform.position - nextWaypoint.position;
+                if(dir.x > 0)
+                {
+                    Flip(true);
+                    if (rotationStyle == RotationStyle.FaceNextWaypoint || rotationStyle == RotationStyle.TravelThenFacePlayer)
+                    {
+                        transform.right = dir;
+                    }
+                }
+                else
+                {
+                    Flip(false);
+                    if(rotationStyle == RotationStyle.FaceNextWaypoint || rotationStyle == RotationStyle.TravelThenFacePlayer)
+                    {
+                        transform.right = -dir;
+                    }
+                }
+
+                if (flyingStyle == FlyingStyle.Discrete)
+                {
+                    transform.position = Vector2.SmoothDamp(transform.position, nextWaypoint.position, ref placeholder, flySpeed, Mathf.Infinity, Time.deltaTime);
+                }
+                else
+                {
+                    transform.Translate(direction * flySpeed * Time.deltaTime);
+                }
+            }
+            yield return new WaitForFixedUpdate();
+            StartCoroutine(MoveToNextWaypoint());
+        }
+        else
+        {
+            arrivedAtWaypoint = true;
+            if (movementStyle == MovementStyle.Grounded)
+            {
+                _rigidbody.velocity = new Vector2(0, _rigidbody.velocity.y);
+            }
+
+            yield return new WaitForSeconds(WaypointWaitTime);
+            GetNextWaypoint();
+            StartCoroutine(MoveToNextWaypoint());
+        }
+    }
+
+    protected void Flip(bool Toggle)
+    {
+        _renderer.flipX = Toggle;
+        if (Toggle)
+        {
+            collider.transform.localScale = new Vector3(-1,1,1);
+        }
+        else
+        {
+            collider.transform.localScale = new Vector3(1, 1, 1);
+        }
+    }
+
+    protected void Update()
+    {
+        if (rotationStyle == RotationStyle.FacePlayer)
+        {
+            FacePlayer();
+        }
+
+        if(rotationStyle == RotationStyle.TravelThenFacePlayer)
+        {
+            if (arrivedAtWaypoint)
+            {
+                FacePlayer();
+            }
+        }
+    }
+
+    private void FacePlayer()
+    {
+        Vector2 dir = transform.position - player.transform.position;
+        if (dir.x > 0)
+        {
+            Flip(true);
+            transform.right = dir;
+        }
+        else
+        {
+            Flip(false);
+            transform.right = -dir;
+        }
+    }
+}
